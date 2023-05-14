@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -119,7 +120,7 @@ class AuthController extends Controller
 
         try {
             $validate = Validator::make($request->all(),[
-                'email' => 'required|email'
+                'email' => 'required|email',
             ]);
             if ($validate->fails()){
                 return response()->json([
@@ -136,15 +137,22 @@ class AuthController extends Controller
                     'message'=>'user doesn"t exist',
                 ], 401);
             }
-
+            // $password = Str::password(8);
+            $password = rand(1000, 9999);
+            // $hashed_random_password = Hash::make(str_random(8));
+            // $user->password = Hash::make($request->password);
+            $user->verification_code = $password;
+            $user->save();
 
             $mail_data = [
                 'recipient' => $request->email,
                 'fromEmail' => "cadrinipfe@gmail.com",
                 'fromName' => 'companyName',
                 'subject' => 'Verifier Mail',
-                'body' => 'Mail Body'
+                'body' => 'Mail Body',
+                'code' => $password
             ];
+
             Mail::send('email_template',$mail_data, function($message) use ($mail_data){
                 $message->to($mail_data['recipient'])
                 ->from($mail_data['fromEmail'])
@@ -155,6 +163,52 @@ class AuthController extends Controller
             return response()->json([
                 'status'=> true,
                 'message'=>'Email was sent',
+
+            ], 200);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'status'=> false,
+                'message'=>$th->getMessage()
+            ], 500);
+        }
+    }
+
+    public function Update_forgoten_password(Request $request) {
+
+        try {
+            $validate = Validator::make($request->all(),[
+                'email' => 'required|email',
+                'verification_code' => 'required',
+                'password' => 'required',
+            ]);
+            if ($validate->fails()){
+                return response()->json([
+                    'status'=> false,
+                    'message'=>'validation failed',
+                    'errors'=> $validate->errors()
+                ], 401);
+            }
+
+            $user = User::where('email', $request->email)->first();
+            if (!$user) {
+                return response()->json([
+                    'status'=> false,
+                    'message'=>'user doesn"t exist',
+                ], 401);
+            }
+            if ($user->verification_code !== $request->verification_code) {
+                return response()->json([
+                    'status'=> false,
+                    'message'=>'incorect verification code',
+                ], 401);
+            }
+
+            $user->password = Hash::make($request->password);
+            $user->save();
+
+            return response()->json([
+                'status'=> true,
+                'message'=>'Email was sent & password was updated',
 
             ], 200);
         } catch (\Throwable $th) {
